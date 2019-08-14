@@ -1,17 +1,24 @@
-import sys, os
+# Author: Ugur Yavuz
+# August 2019
+# solve_numberlink.py: A command-line Numberlink solver. First queries for width, height, and color
+#                      count input in command-line, then provides a visual interface powered by
+#                      pygame for the creation of the puzzle.
+
+import os
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"           # Mutes pygame import message.
 import pygame, pygbutton                                    # For GUI.
 from NumberlinkPuzzle import NumberlinkPuzzle               # Puzzle class.
-from datetime import datetime
+from datetime import datetime                               # To name saved files.
 
-# Constants
+# Cell size and cell margin constants.
 SQUARE_SIZE, MARGIN = 40, 2
 
-# Pygame font, window icon, and caption.
+# Set pygame font, window icon, caption and background color.
 font = pygame.font.SysFont('Arial', 18)
 pygbutton.PYGBUTTON_FONT = font
 pygame.display.set_icon(pygame.image.load('Media/icon.png'))
 pygame.display.set_caption("Numberlink Solver")
+BG_COLOR = (245, 245, 220)
 
 
 # Assert positive integer input.
@@ -45,32 +52,41 @@ S_WIDTH, S_HEIGHT = (WIDTH+2) * SQUARE_SIZE + (WIDTH+1) * MARGIN, (HEIGHT+3) * S
 screen = pygame.display.set_mode([S_WIDTH, S_HEIGHT])
 clock = pygame.time.Clock()
 
-DONE = False
-ADDING_COLORS = True
-CUR_LOC = None
-COLOR_LOCS = []
-PRINTED = False
-SOLVE_ATTEMPTED = False
-SOLVE_FAILED = False
+# Global state variables.
+DONE = False                # False while program is still executing.
+ADDING_COLORS = True        # True while colors are being picked.
+CUR_LOC = None              # Currently selected (x, y) tuple.
+COLOR_LOCS = []             # Array selected color (number) locations.
+PRINTED = False             # True when the color currently being selected is printed in console.
+SOLVE_ATTEMPTED = False     # True if solve() was run.
+SOLVE_FAILED = False        # False if solve() has failed.
 
+# All buttons
 addButton = pygbutton.PygButton(((SQUARE_SIZE + (WIDTH+1) * (MARGIN+SQUARE_SIZE)) // 2 - SQUARE_SIZE,
                                  (HEIGHT+1) * (MARGIN+SQUARE_SIZE) + SQUARE_SIZE//2,
-                                 2*SQUARE_SIZE, SQUARE_SIZE), "Add")
+                                 2 * SQUARE_SIZE, SQUARE_SIZE), "Add")
 
-solveButton = pygbutton.PygButton(((SQUARE_SIZE + (WIDTH+1) * (MARGIN+SQUARE_SIZE)) // 2 - SQUARE_SIZE,
+solveButton = pygbutton.PygButton(((SQUARE_SIZE + (WIDTH+1) * (MARGIN+SQUARE_SIZE)) // 2 -
+                                   SQUARE_SIZE, (HEIGHT+1) * (MARGIN+SQUARE_SIZE) + SQUARE_SIZE//2,
+                                   2 * SQUARE_SIZE, SQUARE_SIZE), "Solve")
+
+jpgButton = pygbutton.PygButton(((SQUARE_SIZE + (WIDTH+1) * (MARGIN+SQUARE_SIZE) -
+                                  (font.size("Save as .JPG")[0] + SQUARE_SIZE)) // 2,
                                  (HEIGHT+1) * (MARGIN+SQUARE_SIZE) + SQUARE_SIZE//2,
-                                 2*SQUARE_SIZE, SQUARE_SIZE), "Solve")
+                                 font.size("Save as .JPG")[0] + SQUARE_SIZE, SQUARE_SIZE),
+                                "Save as .JPG")
 
-jpgButton = pygbutton.PygButton(((SQUARE_SIZE + (WIDTH+1) * (MARGIN+SQUARE_SIZE) - (font.size("Save as .JPG")[0] + SQUARE_SIZE)) // 2,
-                                 (HEIGHT+1) * (MARGIN+SQUARE_SIZE) + SQUARE_SIZE//2,
-                                 font.size("Save as .JPG")[0] + SQUARE_SIZE, SQUARE_SIZE), "Save as .JPG")
-
+# Only addButton is initially visible.
 solveButton.visible = False
 jpgButton.visible = False
-
 buttons = [addButton, solveButton, jpgButton]
 
+
 def add_loc():
+    """
+    Add CUR_LOC to COLOR_LOCS, defined as method for convenience.
+    Returns nothing.
+    """
     global CUR_LOC, PRINTED
     if len(COLOR_LOCS) < 2 * COUNT and CUR_LOC and CUR_LOC not in COLOR_LOCS:
         COLOR_LOCS.append(CUR_LOC)
@@ -82,13 +98,18 @@ def add_loc():
 
 
 def solve():
+    """
+    Solve puzzle with provided width, height and COLOR_LOCS.
+    :return: Returns False if the puzzle is not solveable, True otherwise.
+    """
     puzzle = NumberlinkPuzzle(WIDTH, HEIGHT, COLOR_LOCS)
     assignments = puzzle.solve(puzzle.generate_cnf())
 
     if not assignments:
         return False
 
-    # print(assignments)
+    # Read every assignment line, and set corresponding value in grid to True.
+    # Note that color literals are not relevant in the drawing of the solution.
     for line in assignments:
         signed_vars = line.split()
         if len(signed_vars) > 1:
@@ -106,7 +127,14 @@ def solve():
 
     return True
 
+
 def is_quit_event(event):
+    """
+    Returns True if provided event is a quit event.
+    :param event: Any pygame event.
+    :return: True if QUIT signal is given, or ESC is pressed, or CMD + Q is pressed,
+    or ALT + F4 is pressed.
+    """
     if event.type == pygame.QUIT:
         return True
     elif event.type == pygame.KEYDOWN:
@@ -118,67 +146,77 @@ def is_quit_event(event):
             return True
     return False
 
-while not DONE:
 
-    for event in pygame.event.get():  # User did something
+# Main drawing loop.
+while not DONE:
+    # Examine events (quit signal, click, keyboard press, button press)
+    for event in pygame.event.get():
         if is_quit_event(event):
-            DONE = True  # Flag that we are DONE so we exit this loop
+            DONE = True
         elif event.type == pygame.MOUSEBUTTONDOWN:
-            # User clicks the mouse. Get the position
             pos = pygame.mouse.get_pos()
+            # Set CUR_LOC as the location of the click, if ADDING_COLORS and click is in the grid.
             if ADDING_COLORS:
                 if (SQUARE_SIZE + MARGIN) < pos[0] < (WIDTH+1) * SQUARE_SIZE + WIDTH * MARGIN and \
                         ((SQUARE_SIZE + MARGIN) < pos[1] < (HEIGHT+1) * SQUARE_SIZE + HEIGHT * MARGIN):
                     CUR_LOC = pos[0] // (SQUARE_SIZE+MARGIN) - 1, pos[1] // (SQUARE_SIZE+MARGIN) - 1
 
+        # Check button presses.
         if 'click' in addButton.handleEvent(event):
             if ADDING_COLORS:
                 add_loc()
-
-        if 'click' in solveButton.handleEvent(event):
+        elif 'click' in solveButton.handleEvent(event):
             CUR_LOC, PRINTED = None, False
             SOLVE_FAILED = not solve()
             SOLVE_ATTEMPTED = True
             solveButton.visible = False
-
-        if 'click' in jpgButton.handleEvent(event):
+        elif 'click' in jpgButton.handleEvent(event):
             if not os.path.exists(os.getcwd() + '/Solutions'):
                 os.makedirs(os.getcwd() + '/Solutions')
             fname = os.getcwd() + '/Solutions' + datetime.now().strftime("/%m-%d-%Y-%H.%M.%S.jpg")
             pygame.image.save(screen.subsurface(pygame.Rect(SQUARE_SIZE, SQUARE_SIZE,
                                                             WIDTH * (SQUARE_SIZE + MARGIN) + MARGIN,
-                                                            HEIGHT * (SQUARE_SIZE + MARGIN) + MARGIN)), fname)
+                                                            HEIGHT * (SQUARE_SIZE + MARGIN) + MARGIN)),
+                              fname)
 
+    # Stop color adding once all colors have been added.
     if ADDING_COLORS and len(COLOR_LOCS) == 2 * COUNT:
         ADDING_COLORS = False
         addButton.visible = False
         solveButton.visible = True
 
+    # Print color currently being added.
     if not PRINTED and ADDING_COLORS:
         print(f"Selecting cells for {len(COLOR_LOCS) // 2 + 1}, cell #{len(COLOR_LOCS) % 2 + 1}.")
         PRINTED = True
 
-    screen.fill((245, 245, 220))
+    # Fill background.
+    screen.fill(BG_COLOR)
 
+    # Draw grid outline.
     pygame.draw.rect(screen, (0, 0, 0), [SQUARE_SIZE, SQUARE_SIZE,
                                          WIDTH * SQUARE_SIZE + (WIDTH+1) * MARGIN,
                                          HEIGHT * SQUARE_SIZE + (HEIGHT+1) * MARGIN])
 
-    # Draw grid
+    # Draw grid.
     for y in range(HEIGHT):
         for x in range(WIDTH):
             pygame.draw.rect(screen, (255, 255, 255),
                              [(x+1)*(SQUARE_SIZE+MARGIN), (y+1)*(SQUARE_SIZE+MARGIN),
                               SQUARE_SIZE, SQUARE_SIZE])
+            # If cell is given a number (color), print the number.
             if grid[x][y][0] is not None:
                 text_surface = font.render(f"{grid[x][y][0]}", True, (0, 0, 0))
                 text_size = font.size(f"{grid[x][y][0]}")
                 screen.blit(text_surface,
                             ((MARGIN + SQUARE_SIZE) * (x+1) + (SQUARE_SIZE - text_size[0]) // 2,
                              (MARGIN + SQUARE_SIZE) * (y+1) + (SQUARE_SIZE - text_size[1]) // 2))
+            # Draw associated lines.
             for i, val in enumerate(grid[x][y][1]):
                 if val:
-                    p1 = [(x+1) * (MARGIN+SQUARE_SIZE) + SQUARE_SIZE // 2, (y+1) * (MARGIN+SQUARE_SIZE) + SQUARE_SIZE // 2]
+
+                    p1 = [(x+1) * (MARGIN+SQUARE_SIZE) + SQUARE_SIZE // 2, (y+1) *
+                          (MARGIN+SQUARE_SIZE) + SQUARE_SIZE // 2]
                     p2 = p1.copy()
                     p2[i % 2] = p2[i % 2] + (1 if i // 2 == 0 else -1) * SQUARE_SIZE // 2
                     if grid[x][y][0] is not None:
@@ -186,7 +224,7 @@ while not DONE:
                     pygame.draw.line(screen, (255, 0, 0), p1, p2, MARGIN)
 
     if SOLVE_ATTEMPTED:
-        # Failed solve
+        # Blit red transparent surface on grid, and print explanation if unsolvable.
         if SOLVE_FAILED:
             red_surface = pygame.Surface((WIDTH * (SQUARE_SIZE + MARGIN) + MARGIN,
                                           HEIGHT * (SQUARE_SIZE + MARGIN) + MARGIN))
@@ -200,21 +238,25 @@ while not DONE:
             text_surface = font.render("Puzzle in unsolvable.", True, (0, 0, 0))
             text_size = font.size("Puzzle in unsolvable.")
             screen.blit(text_surface, ((S_WIDTH - text_size[0]) // 2, S_HEIGHT - SQUARE_SIZE - text_size[1] // 2))
+        # Display .jpg button if puzzle solved.
         else:
-            # Save .jpg button
             jpgButton.visible = True
 
-    # Outline currently selected location
+    # Outline currently selected location.
     if CUR_LOC:
         x, y = CUR_LOC
-        pygame.draw.rect(screen, (255, 0, 0), [(x + 1) * (SQUARE_SIZE + MARGIN) - MARGIN, 
-            (y + 1) * (SQUARE_SIZE + MARGIN) - MARGIN, SQUARE_SIZE + 1.5 * MARGIN, 
-            SQUARE_SIZE + 1.5 * MARGIN], MARGIN)
+        pygame.draw.rect(screen, (255, 0, 0), [(x + 1) * (SQUARE_SIZE + MARGIN) - MARGIN,
+                                               (y + 1) * (SQUARE_SIZE + MARGIN) - MARGIN,
+                                               SQUARE_SIZE + 1.5 * MARGIN,
+                                               SQUARE_SIZE + 1.5 * MARGIN], MARGIN)
 
+    # Draw every button.
     for button in buttons:
         button.draw(screen)
 
+    # Refresh display.
     clock.tick(60)
     pygame.display.flip()
 
+# End of program.
 pygame.quit()
